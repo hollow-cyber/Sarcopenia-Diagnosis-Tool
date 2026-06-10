@@ -1,0 +1,5 @@
+# Web UI 框架
+streamlit>=1.58.0
+
+# 数据处理与科学计算
+pandas>=3.0.0
