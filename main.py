@@ -66,7 +66,7 @@ def st_diagnose_sarcopenia():
 	df = pd.DataFrame()
 	if diagnosis_mode == diagnosis_mode_list[1]:
 		uploaded_file = st.file_uploader("请上传包含所有诊断项结果的Excel或csv文件：", type=["xlsx", "xls", "csv"],
-		                                 help="程序默认csv文件中数据首行为列名")
+		                                 help="程序默认csv文件中数据首行为列名，非数字型内容会被当成空值")
 		
 		if uploaded_file is not None:
 			try:
@@ -118,7 +118,8 @@ def st_diagnose_sarcopenia():
 				gender = st.radio(f"{gender_label}：", ["男", "女"], horizontal=True)
 				base_info_vars.append("gender")
 			elif diagnosis_mode == diagnosis_mode_list[1]:
-				gender_col = st.selectbox(f"记录{gender_label}的列名：", columns, index=None, placeholder="请选择列名")
+				gender_col = st.selectbox(f"记录{gender_label}的列名：", columns, index=None, placeholder="请选择列名",
+				                          help="该列值可为：男/女、M/F、male/female、0/1")
 				base_info_vars.append("gender_col")
 		if sarcopenia_consensus == "AWGS 2025":
 			with cols[1]:
