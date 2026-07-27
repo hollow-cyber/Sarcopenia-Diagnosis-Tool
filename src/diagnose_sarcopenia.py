@@ -23,9 +23,9 @@ def diagnose_sarcopenia(
 	try:
 		# 1. 性别信息提取
 		gender = str(data_row.get('gender', '')).strip().upper()
-		if gender in ['男', 'M', 'MALE', '1', ]:
+		if gender in ['男', 'M', 'MALE', '0', ]:
 			gender_key = 'M'
-		elif gender in ['女', 'F', 'FEMALE', '0']:
+		elif gender in ['女', 'F', 'FEMALE', '1']:
 			gender_key = 'F'
 		else:
 			return "性别数据无法识别"
