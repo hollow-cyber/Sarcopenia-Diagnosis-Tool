@@ -8,6 +8,7 @@ import os
 import pandas as pd
 import streamlit as st
 from urllib.parse import urljoin
+from typing import cast
 
 from src.consensus import CUTOFFS
 from src.set_st_custom_style import set_st_header, show_custom_toast
@@ -73,7 +74,7 @@ def st_diagnose_sarcopenia():
 				show_data = True
 				# 读取文件
 				if uploaded_file.name.lower().endswith('.csv'):
-					df = pd.read_csv(uploaded_file)
+					df = cast(pd.DataFrame, pd.read_csv(uploaded_file))
 				else:
 					# 读取 Excel 文件的所有表单名称
 					excel_file = pd.ExcelFile(uploaded_file)
