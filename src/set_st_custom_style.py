@@ -165,9 +165,10 @@ def set_st_header(
 		}
 		</style>
 		"""
-	# 在调用处稍微修改下 html_content 以适应文字层级
-	html_content = f"<div class='fancy-gradient-box'><span>{notice_str}</span></div>"
-	st.markdown(css_style + html_content, unsafe_allow_html=True)
+	if notice_str:
+		# 在调用处稍微修改下 html_content 以适应文字层级
+		html_content = f"<div class='fancy-gradient-box'><span>{notice_str}</span></div>"
+		st.markdown(css_style + html_content, unsafe_allow_html=True)
 	
 	if sidebar_title:
 		# 添加侧边栏组件
