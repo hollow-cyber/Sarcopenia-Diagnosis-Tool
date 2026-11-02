@@ -12,46 +12,45 @@ from typing import Literal
 
 
 def get_image_base64(image_path: str | Path) -> str:
-	"""将本地图片转换为 base64 编码
+    """将本地图片转换为 base64 编码字符串。
 
-	Args:
-		image_path: 图片文件完整路径。
+    Args:
+        image_path: 图片文件完整路径。
 
-	Returns:
-		64位格式的图片。
-	"""
-	img_bytes = Path(image_path).read_bytes()
-	return base64.b64encode(img_bytes).decode()
+    Returns:
+        base64 编码的图片文本。
+    """
+    img_bytes = Path(image_path).read_bytes()
+    return base64.b64encode(img_bytes).decode()
 
 
 def set_st_header(
-		main_title: str,
-		sidebar_title: str | None,
-		logo_path: str | Path | None,
-		layout_mode: Literal["centered", "wide"] | None = "wide",
-		notice_str: str | None = None,
-		warning_str: str | None = "运行程序时请不要关闭黑色命令行窗口，它才是本体。",
+        main_title: str,
+        sidebar_title: str | None,
+        logo_path: str | Path | None,
+        layout_mode: Literal["centered", "wide"] | None = "wide",
+        notice_str: str | None = None,
+        warning_str: str | None = "运行程序时请不要关闭黑色命令行窗口，它才是本体。",
 ) -> None:
-	"""
-	设置streamlit网页头部显示信息。
+    """设置 Streamlit 网页头部显示信息。
 
-	Args:
-		main_title: 主标题。
-		sidebar_title: 侧边栏标题，None表示没有侧边栏。
-		logo_path: 图标文件路径，None表示不展示图标。
-		layout_mode: 页面显示布局，None表示使用默认布局方式。
-		notice_str: 条形框中提示的文字内容。
-		warning_str: 主页面显示的警告信息，自带警告符号，可是markdown格式。
-	"""
-	
-	# 设置页面布局
-	if layout_mode:
-		st.set_page_config(layout=layout_mode)
-	
-	# 主页面内容
-	# 注入自定义 CSS
-	st.markdown(
-		"""
+    Args:
+        main_title: 主标题。
+        sidebar_title: 侧边栏标题，None 表示没有侧边栏。
+        logo_path: 图标文件路径，None 表示不展示图标。
+        layout_mode: 页面显示布局，None 表示使用默认布局方式。
+        notice_str: 条形框中提示的文字内容。
+        warning_str: 主页面显示的警告信息，自带警告符号，可为 markdown 格式。
+    """
+    
+    # 设置页面布局
+    if layout_mode:
+        st.set_page_config(layout=layout_mode)
+    
+    # 主页面内容
+    # 注入自定义 CSS
+    st.markdown(
+        """
 			<style>
 			.main-title {
 				display: flex;  /* 使用 flexbox 布局 */
@@ -65,35 +64,35 @@ def set_st_header(
 			}
 			</style>
 		""",
-		unsafe_allow_html=True
-	)
-	
-	if logo_path and os.path.isfile(logo_path):
-		# 转换图片为 base64
-		logo_base64 = get_image_base64(logo_path)
-		
-		# 在主页面显示图片和标题
-		st.markdown(
-			f"""
+        unsafe_allow_html=True
+    )
+    
+    if logo_path and os.path.isfile(logo_path):
+        # 转换图片为 base64
+        logo_base64 = get_image_base64(logo_path)
+        
+        # 在主页面显示图片和标题
+        st.markdown(
+            f"""
 				<div class="main-title">
 					<img src="data:image/png;base64,{logo_base64}" alt="logo">
 					<h1>{main_title}</h1>
 				</div>
 				""",
-			unsafe_allow_html=True
-		)
-	else:
-		st.markdown(
-			f"""
+            unsafe_allow_html=True
+        )
+    else:
+        st.markdown(
+            f"""
 				<div class="main-title">
 					<h1>{main_title}</h1>
 				</div>
 				""",
-			unsafe_allow_html=True
-		)
-	
-	# 设置渐变色块显示的醒目告示
-	css_style = """
+            unsafe_allow_html=True
+        )
+    
+    # 设置渐变色块显示的醒目告示
+    css_style = """
 		<style>
 		@keyframes tech-flow {
 		    0% {
@@ -165,43 +164,43 @@ def set_st_header(
 		}
 		</style>
 		"""
-	if notice_str:
-		# 在调用处稍微修改下 html_content 以适应文字层级
-		html_content = f"<div class='fancy-gradient-box'><span>{notice_str}</span></div>"
-		st.markdown(css_style + html_content, unsafe_allow_html=True)
-	
-	if sidebar_title:
-		# 添加侧边栏组件
-		# 注入自定义 CSS，设置侧边栏标题居中
-		st.markdown(
-			"""
+    if notice_str:
+        # 在调用处稍微修改下 html_content 以适应文字层级
+        html_content = f"<div class='fancy-gradient-box'><span>{notice_str}</span></div>"
+        st.markdown(css_style + html_content, unsafe_allow_html=True)
+    
+    if sidebar_title:
+        # 添加侧边栏组件
+        # 注入自定义 CSS，设置侧边栏标题居中
+        st.markdown(
+            """
 			<style>
 			[data-testid="stSidebar"] h1 {
 				text-align: center;  /* 设置文字居中 */
 			}
 			</style>
 			""",
-			unsafe_allow_html=True
-		)
-		st.sidebar.title(sidebar_title)
-		st.sidebar.divider()
-		
-	if warning_str:
-		st.warning(
-			f"""
+            unsafe_allow_html=True
+        )
+        st.sidebar.title(sidebar_title)
+        st.sidebar.divider()
+        
+    if warning_str:
+        st.warning(
+            f"""
 			⚠️ {warning_str}
 		""")
 
 
 def show_custom_toast(
-		message: str,
-		icon: str = "💡",
-		total_time: int | float = 2,
-		fade_in_time: int | float = 0.25,
-		fade_out_time: int | float = 0.5,
-		top_gap: int | float = 0.3,
+        message: str,
+        icon: str = "💡",
+        total_time: int | float = 2,
+        fade_in_time: int | float = 0.25,
+        fade_out_time: int | float = 0.5,
+        top_gap: int | float = 0.3,
 ) -> None:
-	"""显示一个基于纯 CSS 动画的非阻塞提示窗口。
+    """显示一个基于纯 CSS 动画的非阻塞提示窗口。
 
     该函数通过注入 HTML 和 CSS 实现一个自定义提示框。提示框会从屏幕顶部
     中心弹出，并在指定时间后自动消失。整个过程不使用 time.sleep，
@@ -216,36 +215,36 @@ def show_custom_toast(
         fade_out_time: 淡出动画的时长（秒）。
         top_gap: 提示窗口与屏幕顶部的距离，小于1则表示距离占总体屏幕高度的比例，大于1则表示绝对距离像素。
     """
-	
-	# 校验并调整时间参数，防止逻辑错误导致关键帧冲突
-	if (fade_in_time + fade_out_time) > total_time:
-		# 如果总时间不足，按比例缩减淡入淡出时间
-		scale = total_time / (fade_in_time + fade_out_time + 0.1)
-		fade_in_time *= scale
-		fade_out_time *= scale
-	
-	# 计算 CSS 关键帧百分比
-	# 0% 为起点，100% 为终点
-	in_pct = (fade_in_time / total_time) * 100
-	out_pct = ((total_time - fade_out_time) / total_time) * 100
-	
-	# 生成唯一的 ID 避免 CSS 类名冲突
-	uid = str(uuid.uuid4())[:8]
+    
+    # 校验并调整时间参数，防止逻辑错误导致关键帧冲突
+    if (fade_in_time + fade_out_time) > total_time:
+        # 如果总时间不足，按比例缩减淡入淡出时间
+        scale = total_time / (fade_in_time + fade_out_time + 0.1)
+        fade_in_time *= scale
+        fade_out_time *= scale
+    
+    # 计算 CSS 关键帧百分比
+    # 0% 为起点，100% 为终点
+    in_pct = (fade_in_time / total_time) * 100
+    out_pct = ((total_time - fade_out_time) / total_time) * 100
+    
+    # 生成唯一的 ID 避免 CSS 类名冲突
+    uid = str(uuid.uuid4())[:8]
 
-	# 获取当前屏幕高度
-	try:
-		import tkinter
-		root = tkinter.Tk()
-		height = root.winfo_screenheight()
-		root.destroy()
-	except ImportError:
-		# 设置默认屏幕高度为1080
-		height = 1080
-		# 显式声明 tkinter 未定义
-		tkinter = None
-	top_distance = int(height * top_gap) if top_gap < 1 else int(top_gap)
-	
-	toast_html = f"""
+    # 获取当前屏幕高度
+    try:
+        import tkinter
+        root = tkinter.Tk()
+        height = root.winfo_screenheight()
+        root.destroy()
+    except ImportError:
+        # 设置默认屏幕高度为1080
+        height = 1080
+        # 显式声明 tkinter 未定义
+        tkinter = None
+    top_distance = int(height * top_gap) if top_gap < 1 else int(top_gap)
+    
+    toast_html = f"""
     <style>
         @keyframes toast-anim-{uid} {{
             0% {{
@@ -296,5 +295,5 @@ def show_custom_toast(
         <span>{message}</span>
     </div>
     """
-	
-	st.markdown(toast_html, unsafe_allow_html=True)
+    
+    st.markdown(toast_html, unsafe_allow_html=True)
