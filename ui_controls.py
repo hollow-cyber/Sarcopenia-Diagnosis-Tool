@@ -253,11 +253,13 @@ class FormContext:
     def inputs(
             self,
             rules: Sequence[Rule],
+            max_columns: int = 3,
     ) -> dict[str, object]:
         """并排绘制一组测量输入，返回字段名到输入值的映射。
 
         Args:
             rules: 需要绘制的测量规则。
+            max_columns: 一行最多显示几列。
 
         Returns:
             字段名到数值（或批量列名）的映射。
@@ -273,5 +275,6 @@ class FormContext:
             values[rule.field] = self.number(rule)
 
         # 宽度来自规则定义，不按指标名称硬编码。
-        render_in_columns(rules, draw, weights=[rule.column_weight for rule in rules])
+        render_in_columns(rules, draw, weights=[rule.column_weight for rule in rules],
+                          max_columns=max_columns)
         return values

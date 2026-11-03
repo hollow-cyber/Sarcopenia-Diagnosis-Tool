@@ -94,7 +94,9 @@ def render_form(ctx: FormContext) -> dict[str, object]:
     performance = SPEC.domain("performance")
     with ctx.panel(performance):
         # 替代测量：三项都显示，使用者只填其中一项或多项也可以。
-        values.update(ctx.inputs(performance.rules))
+        # 手动输入保持三列；批量映射时列名标签较长，改为两列避免标签换行。
+        values.update(ctx.inputs(performance.rules,
+                                 max_columns=2 if ctx.batch else 3))
     return values
 
 

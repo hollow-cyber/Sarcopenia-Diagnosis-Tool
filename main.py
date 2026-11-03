@@ -9,7 +9,7 @@ import streamlit as st
 
 from src.set_st_custom_style import set_st_header
 from consensuses import CONSENSUSES
-from ui import render_diagnosis, render_source
+from ui import clear_diagnosis_results, render_diagnosis, render_source
 
 
 def main() -> None:
@@ -32,7 +32,8 @@ def main() -> None:
     with st.container(border=True):
         # tuple(profiles)取字典的键作为选项；控件返回显示名称后再查回完整定义。
         selected = st.pills("🔍 用于诊断肌少症的共识：", tuple(profiles),
-                             default=CONSENSUSES[0].title, key="diagnosis:consensus")
+                             default=CONSENSUSES[0].title, key="diagnosis:consensus",
+                             on_change=clear_diagnosis_results)
         if selected is None:
             st.info("请选择一个诊断共识。")
             return

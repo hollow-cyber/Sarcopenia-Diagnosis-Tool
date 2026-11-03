@@ -21,6 +21,24 @@ from ui_controls import FormContext, render_in_columns
 
 
 CONTEXT_LABELS = {"gender": "性别", "age": "年龄"}
+DOWNLOAD_NOTICE_KEY = "diagnosis:download_notice"
+
+
+def clear_diagnosis_results() -> None:
+    """清空所有共识、模式保存的诊断结果。
+
+    切换共识、诊断模式、上传文件或选择工作表时作为 on_change 回调调用，
+    避免用户还没完成当前输入时看到上一次的诊断结论。
+    """
+    for key in list(st.session_state.keys()):
+        if isinstance(key, str) and key.startswith("diagnosis:") and key.endswith(":result"):
+            st.session_state.pop(key, None)
+    st.session_state.pop(DOWNLOAD_NOTICE_KEY, None)
+
+
+def mark_download_clicked() -> None:
+    """记录下载按钮点击，供本次重运行显示下载成功提示。"""
+    st.session_state[DOWNLOAD_NOTICE_KEY] = True
 
 
 def render_context(
@@ -170,7 +188,8 @@ def render_diagnosis(
     prefix = f"diagnosis:{consensus.key}"
     options = ["👤 手动输入单人数据", "📁 批量 Excel/CSV 上传"]
     mode = st.segmented_control("🔍 诊断模式：", options,
-                                default=options[0], key=f"{prefix}:mode")
+                                default=options[0], key=f"{prefix}:mode",
+                                on_change=clear_diagnosis_results)
     if mode is None:
         # segmented_control 允许取消选择，此时不继续绘制任何一种诊断表单。
         return
@@ -182,18 +201,20 @@ def render_diagnosis(
     # 2. 批量模式先读文件，得到供列映射控件选择的列名；单人模式直接跳过此段。
     if batch:
         uploaded = st.file_uploader("请上传包含受试者数据的 Excel 或 CSV 文件：", type=upload_file_ext,
-                                    key=f"{prefix}:upload")
+                                    key=f"{prefix}:upload", on_change=clear_diagnosis_results)
         if uploaded is None:
             return
         data = uploaded.getvalue()
         file_tag = uploaded.name
-        has_header = st.checkbox("首行为列名", value=True, key=f"{prefix}:header")
+        has_header = st.checkbox("首行为列名", value=True, key=f"{prefix}:header",
+                                 on_change=clear_diagnosis_results)
         sheet: str | None = None
         try:
             # CSV 没有工作表选择；Excel 先列出工作表，再按所选表读取记录。
             if uploaded.name.lower().endswith(".xlsx"):
                 sheet = st.selectbox("需要读取的工作表：", sheet_names(data),
-                                     key=f"{prefix}:sheet:{file_tag}")
+                                     key=f"{prefix}:sheet:{file_tag}",
+                                     on_change=clear_diagnosis_results)
             frame = load_table(data, uploaded.name, sheet, has_header)
         except (ValueError, OSError, KeyError, EOFError, BadZipFile,
                 InvalidFileException, ParseError) as exc:
@@ -219,19 +240,20 @@ def render_diagnosis(
     if st.button("🩺 开始诊断", type="primary", width="stretch", key=f"{prefix}:diagnose"):
         # 新诊断开始前移除旧结果，避免本次校验失败时还显示上次成功结果。
         st.session_state.pop(result_key, None)
-        if batch and frame is not None:
-            try:
-                # 批量控件返回列名或 None；将较宽泛的 payload 整理为列映射接口格式。
-                mapping = {field: value if isinstance(value, str) else None
-                           for field, value in payload.items()}
-                output = diagnose_batch(consensus, frame, mapping, selections)
-                # session_state 在脚本重运行之间保留结果：结果表与 Excel 字节。
-                st.session_state[result_key] = (output, export_excel(output))
-            except ValueError as exc:
-                st.error(f"无法评估：{exc}")
-        else:
-            # 单人直接使用相同引擎；下载文件在单人模式下不需要，使用 None 占位。
-            st.session_state[result_key] = (evaluate(consensus, payload, selections), None)
+        with st.spinner("正在计算诊断结果，请稍候…"):
+            if batch and frame is not None:
+                try:
+                    # 批量控件返回列名或 None；将较宽泛的 payload 整理为列映射接口格式。
+                    mapping = {field: value if isinstance(value, str) else None
+                               for field, value in payload.items()}
+                    output = diagnose_batch(consensus, frame, mapping, selections)
+                    # session_state 在脚本重运行之间保留结果：结果表与 Excel 字节。
+                    st.session_state[result_key] = (output, export_excel(output))
+                except ValueError as exc:
+                    st.error(f"无法评估：{exc}")
+            else:
+                # 单人直接使用相同引擎；下载文件在单人模式下不需要，使用 None 占位。
+                st.session_state[result_key] = (evaluate(consensus, payload, selections), None)
 
     # 5. 程序重运行时继续显示本次模式最近一次诊断的结果。
     cached = st.session_state.get(result_key)
@@ -241,10 +263,13 @@ def render_diagnosis(
     if isinstance(result, pd.DataFrame):
         st.success(f"批量诊断完成，共 {len(result)} 条记录；请同时查看评估说明。")
         display_table(result)
-        # 只导出 Excel；on_click="ignore" 让点击下载本身不触发重新执行诊断页面。
+        # 下载回调只负责记录点击，重运行后再显示提示，避免中断下载。
         st.download_button("📥 下载诊断结果 Excel", data=excel_bytes,
                            file_name=f"Sarcopenia_{consensus.title}_Results.xlsx",
                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                           on_click="ignore", width="stretch", key=f"{prefix}:download")
+                           on_click=mark_download_clicked, width="stretch",
+                           key=f"{prefix}:download")
+        if st.session_state.pop(DOWNLOAD_NOTICE_KEY, False):
+            st.toast("下载成功", icon="✅")
     else:
         show_result(result)
