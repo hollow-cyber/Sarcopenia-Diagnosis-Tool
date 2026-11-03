@@ -35,7 +35,7 @@ def classify(states: Mapping[str, State]) -> Result:
     if mass == State.MISSING:
         if strength == State.LOW or performance == State.LOW:
             return Result(POSSIBLE, "可能肌少症", notes=(
-                "肌量未测，建议补充肌量测量以明确诊断。",))
+                "肌量无效或未测，建议补充肌量测量以明确诊断。",))
         return unavailable("肌肉质量")
     elif mass == State.NORMAL:
         if strength == State.LOW or performance == State.LOW:
@@ -51,7 +51,7 @@ def classify(states: Mapping[str, State]) -> Result:
                 return Result(SARCOPENIA, "肌少症")
             else:
                 return Result(SARCOPENIA, "肌少症", notes=(
-                    "体力表现项目未测试，肌少症严重程度未完全评估",))
+                    "体力表现项目均无效或未测试，肌少症严重程度未完全评估",))
         elif strength == State.NORMAL:
             if performance == State.LOW:
                 return Result(SARCOPENIA, "肌少症")
@@ -63,7 +63,7 @@ def classify(states: Mapping[str, State]) -> Result:
             # 力量未测：肌量与体力表现均低也能确诊；否则不能完成严重程度评估。
             if performance == State.LOW:
                 return Result(SARCOPENIA, "肌少症", notes=(
-                    "肌肉力量项目未测试，肌少症严重程度未完全评估",))
+                    "肌肉力量项目无效或未测试，肌少症严重程度未完全评估",))
             elif performance == State.NORMAL:
                 return unavailable("肌肉力量")
             else:

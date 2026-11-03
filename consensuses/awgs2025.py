@@ -35,7 +35,7 @@ def classify(states: Mapping[str, State]) -> Result:
     else:
         if mass == State.MISSING:
             # 力量低下、肌量未测：只能给出进一步评估提示。
-            return Result(POSSIBLE, "可能肌少症", notes=("握力低下、肌量未测。",))
+            return Result(POSSIBLE, "可能肌少症", notes=("握力低下、肌量无效或未测。",))
         elif mass == State.NORMAL:
             # 力量低下、肌量正常：不满足两者均低的诊断条件。
             return Result(NEGATIVE, "非肌少症", notes=("握力低下，但肌量未低于诊断阈值。",))

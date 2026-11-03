@@ -44,7 +44,7 @@ def mark_download_clicked() -> None:
 def render_context(
         consensus: Consensus,
         batch: bool,
-        columns: Sequence[str],
+        columns: Sequence[object],
         namespace: str,
 ) -> dict[str, object]:
     """仅生成当前共识需要的基本信息。
@@ -73,7 +73,7 @@ def render_context(
             if batch:
                 values[field] = st.selectbox(
                     f"记录{label}的列名：", columns, index=None, placeholder="请选择列名", key=key,
-                    help="支持男/女、M/F、male/female、0/1（0男，1女）。" if field == "gender" else None)
+                    help="支持男/女、M/F、male/female、1/2（1男，2女）。" if field == "gender" else None)
             elif field == "gender":
                 # 页面显示男／女，实际返回 M/F，避免显示文案影响内部数据格式。
                 values[field] = st.radio("性别：", ("M", "F"), horizontal=True,
@@ -157,7 +157,7 @@ def load_table(
         sheet: str | None,
         has_header: bool,
 ) -> pd.DataFrame:
-    """缓存文件解析；所有影响读取的选项均纳入缓存键。
+    """按当前选项读取上传文件；列名完全保留 pandas 的读取结果。
 
     Args:
         data: 文件字节。
@@ -195,17 +195,21 @@ def render_diagnosis(
         return
     batch = mode == options[1]
     frame: pd.DataFrame | None = None
-    columns: list[str] = []
+    columns: list[object] = []
     file_tag = ""
+    file_name = ""
     
     # 2. 批量模式先读文件，得到供列映射控件选择的列名；单人模式直接跳过此段。
     if batch:
         uploaded = st.file_uploader("请上传包含受试者数据的 Excel 或 CSV 文件：", type=upload_file_ext,
-                                    key=f"{prefix}:upload", on_change=clear_diagnosis_results)
+                                    key=f"{prefix}:upload", on_change=clear_diagnosis_results,
+                                    help="空列、重复列名等会被pandas库自动处理，下载的结果文件中的列名是处理后的列名"
+                                    )
         if uploaded is None:
             return
         data = uploaded.getvalue()
         file_tag = uploaded.name
+        file_name = Path(uploaded.name).stem
         has_header = st.checkbox("首行为列名", value=True, key=f"{prefix}:header",
                                  on_change=clear_diagnosis_results)
         sheet: str | None = None
@@ -243,9 +247,9 @@ def render_diagnosis(
         with st.spinner("正在计算诊断结果，请稍候…"):
             if batch and frame is not None:
                 try:
-                    # 批量控件返回列名或 None；将较宽泛的 payload 整理为列映射接口格式。
-                    mapping = {field: value if isinstance(value, str) else None
-                               for field, value in payload.items()}
+                    # 批量控件返回列名或 None；列名可能是数字、带空格等 pandas 原样结果。
+                    mapping = {field: value for field, value in payload.items()
+                               if value is not None}
                     output = diagnose_batch(consensus, frame, mapping, selections)
                     # session_state 在脚本重运行之间保留结果：结果表与 Excel 字节。
                     st.session_state[result_key] = (output, export_excel(output))
@@ -265,7 +269,7 @@ def render_diagnosis(
         display_table(result)
         # 下载回调只负责记录点击，重运行后再显示提示，避免中断下载。
         st.download_button("📥 下载诊断结果 Excel", data=excel_bytes,
-                           file_name=f"Sarcopenia_{consensus.title}_Results.xlsx",
+                           file_name=f"{file_name}_{consensus.title}_Results.xlsx",
                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                            on_click=mark_download_clicked, width="stretch",
                            key=f"{prefix}:download")

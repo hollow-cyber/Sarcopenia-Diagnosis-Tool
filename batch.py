@@ -1,30 +1,13 @@
 """表格读取、列映射与 Excel 导出；诊断仍由纯 Python 引擎完成。"""
 
-import math
 import pandas as pd
 from collections.abc import Mapping
 from io import BytesIO
-from numbers import Real
 from pathlib import Path
 
 
 from engine import evaluate, resolve_rules
 from models import Consensus
-
-
-def column_name(value: object) -> str:
-    """将原始表头转换为便于列映射的唯一名称候选值。
-
-    Args:
-        value: 作为普通数据读取的原始表头单元格。
-
-    Returns:
-        保留可读性的字符串列名。
-    """
-    # 对 Excel 等来源的整数数值表头去掉无意义的“.0”，文本表头只去除前后空白。
-    if isinstance(value, Real) and math.isfinite(value) and float(value).is_integer():
-        return str(int(value))
-    return str(value).strip()
 
 
 def sheet_names(data: bytes) -> list[str]:
@@ -46,109 +29,42 @@ def read_table(
         filename: str,
         sheet: str | None = None,
         has_header: bool = True,
-        upload_file_ext: tuple[str, ...] = ("xlsx", "csv"),
 ) -> pd.DataFrame:
-    """按是否包含表头读取 CSV 或 xlsx，保留记录中的缺测行。
+    """用 pandas 直接读取 CSV 或 xlsx，列名不做任何额外处理。
 
-    有表头：只读首行检查空列名和重复列名，再用 header=0 正式读取数据。
-    无表头：直接用 header=None 读取，并生成“第1列”等列名。
-    表头不再作为测量数据参与正式读取时的类型推断，数值列可正常推断类型。
+    有表头时交给 pandas 以 header=0 读取：重复列名、空表头、数字表头等
+    都由 pandas 自行决定；无表头时以 header=None 读取，列名为 0、1、2……。
+    本函数不再重命名、去空格、去重或校验列名。
 
     Args:
         data: 文件内容。
-        filename: 文件名，用于判断格式。
+        filename: 文件名，仅用于判断 CSV / xlsx 格式。
         sheet: Excel 工作表名；None 表示第一张工作表。
         has_header: 首行是否为列名。
-        upload_file_ext: 允许上传的文件扩展名。
 
     Returns:
-        具有唯一字符串列名的数据表。
-
-    Raises:
-        ValueError: 格式或编码不支持、无记录、表头缺失或重复、记录列数不匹配。
+        pandas 直接读取得到的数据表。
     """
-    # 1. 确定文件格式及 CSV 编码，保证表头检查和正式读取使用相同的编码。
-    upload_file_ext = list(upload_file_ext)
-    for idx, file_ext in enumerate(upload_file_ext):
-        if not filename.startswith("."):
-            upload_file_ext[idx] = "." + file_ext
     suffix = Path(filename).suffix.lower()
-    if suffix not in upload_file_ext:
-        raise ValueError(f"本工具仅支持上传以下格式的文件：{upload_file_ext}")
-    encoding = "utf-8-sig"
+    header = 0 if has_header else None
     if suffix == ".csv":
         try:
             # UTF-8-sig 同时兼容普通 UTF-8 和 Excel 导出的带 BOM 的 UTF-8 文件。
-            data.decode(encoding)
+            return pd.read_csv(BytesIO(data), header=header, encoding="utf-8-sig",
+                               skip_blank_lines=False)
         except UnicodeDecodeError:
-            encoding = "gb18030"
-
-    def read_rows(
-            header: int | None,
-            nrows: int | None = None,
-    ) -> pd.DataFrame:
-        """用相同文件参数执行一次读取，供首行检查和正式读取复用。
-
-        Args:
-            header: 0 表示首行为表头，None 表示没有表头。
-            nrows: 只读取的记录数；None 表示读取全部记录。
-
-        Returns:
-            此次读取获得的数据表。
-
-        Raises:
-            ValueError: 文件无内容，或 CSV 编码无法解析。
-        """
-        try:
-            # 每次新建 BytesIO，从文件开头读取，避免首行检查后文件指针停在中途。
-            if suffix == ".csv":
-                return pd.read_csv(BytesIO(data), header=header, nrows=nrows,
-                                   encoding=encoding, skip_blank_lines=False)
-            return pd.read_excel(BytesIO(data), header=header, nrows=nrows,
-                                 sheet_name=sheet or 0, engine="openpyxl")
-        except pd.errors.EmptyDataError:
-            raise ValueError("文件中没有数据") from None
-        except UnicodeDecodeError:
-            raise ValueError("不支持的文件编码格式，请转为UTF-8编码后重试") from None
-
-    # 2. 有表头时先单独读一行，在 pandas 自动改写重复列名之前检查原始名称。
-    if has_header:
-        header_frame = read_rows(header=None, nrows=1)
-        if header_frame.empty:
-            raise ValueError("文件中没有数据")
-        header = header_frame.iloc[0]
-        # isna 检查缺失值，strip 后的空字符串判断则补充识别纯空格列名。
-        if header.isna().any() or any(not str(value).strip() for value in header):
-            raise ValueError("表头包含空列名，请补齐列名或取消勾选‘首行为列名’")
-        columns = [column_name(value) for value in header]
-        # 先规范化再去重，避免“握力”和“ 握力 ”成为两个看似不同的表头。
-        if len(set(columns)) != len(columns):
-            raise ValueError("表头含重复列名，请为每列设置唯一名称")
-        # 正式读取使用 header=0：pandas 自己排除表头，测量列不再混入表头文字。
-        frame = read_rows(header=0)
-        # 仍使用校验后的规范名称，例如去掉表头两侧空白、将数字表头转为字符串。
-        frame.columns = columns
-    else:
-        # 无表头时无需预读，第一行直接保留为数据，只为列映射生成可读列名。
-        frame = read_rows(header=None)
-        frame.columns = [f"第{index + 1}列" for index in range(len(frame.columns))]
-    if frame.empty:
-        message = "文件只有表头，没有受试者记录" if has_header else "文件中没有数据"
-        raise ValueError(message)
-    
-    # 未指定索引列时正常应为 RangeIndex。CSV 数据列比表头多时，pandas 可能将多余
-    # 字段自动当成索引；这里拒绝这种情况，防止 reset_index 时悄悄丢掉原始字段。
-    if not isinstance(frame.index, pd.RangeIndex):
-        raise ValueError("数据行的列数与表头不一致，请检查文件")
-    
-    # 3. 只重新编号行索引，不删除空行，也不额外生成索引数据列。
-    return frame.reset_index(drop=True)
+            return pd.read_csv(BytesIO(data), header=header, encoding="gb18030",
+                               skip_blank_lines=False)
+    if suffix == ".xlsx":
+        return pd.read_excel(BytesIO(data), sheet_name=sheet or 0,
+                             header=header, engine="openpyxl")
+    raise ValueError(f"本工具仅支持 .xlsx 或 .csv 文件，当前文件：{filename}")
 
 
 def validate_mapping(
         consensus: Consensus,
         frame: pd.DataFrame,
-        mapping: Mapping[str, str | None],
+        mapping: Mapping[str, object],
         selections: Mapping[str, str] | None = None,
 ) -> None:
     """检查“诊断字段 → 上传表格列名”的对应关系，不检查每行测量值。
@@ -182,9 +98,9 @@ def validate_mapping(
     # | 是集合的并集：测量字段加上当前共识需要的基本信息字段。
     allowed = fields | set(consensus.context_fields)
 
-    # 2. 表格必须有记录，而且列名必须唯一，否则无法可靠地取到单元格。
-    if frame.empty or not frame.columns.is_unique:
-        raise ValueError("数据表为空或存在重复列名")
+    # 2. 表格必须有记录，否则无法进行批量诊断；列名本身不再额外校验。
+    if frame.empty:
+        raise ValueError("数据表为空")
 
     # set(mapping) 取得字典的键；集合相减找出“传入了但当前方案不认识”的字段。
     if set(mapping) - allowed:
@@ -202,7 +118,7 @@ def validate_mapping(
     if len(set(selected)) != len(selected):
         # dict.fromkeys 按首次出现顺序去重，避免错误提示反复列出同一列。
         repeated = [column for column in dict.fromkeys(selected) if selected.count(column) > 1]
-        raise ValueError(f"不同诊断条目不能选择同一列：{'、'.join(repeated)}")
+        raise ValueError(f"不同诊断条目不能选择同一列：{'、'.join(map(str, repeated))}")
 
     # 5. 防止映射引用不存在的列，例如更换文件后沿用了之前文件的列名。
     for column in selected:
@@ -219,7 +135,7 @@ def validate_mapping(
 def diagnose_batch(
         consensus: Consensus,
         frame: pd.DataFrame,
-        mapping: Mapping[str, str | None],
+        mapping: Mapping[str, object],
         selections: Mapping[str, str] | None = None,
 ) -> pd.DataFrame:
     """将表格中的每一行转换为单人记录，评估后追加结果与说明两列。

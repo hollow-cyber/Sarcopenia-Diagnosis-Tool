@@ -28,21 +28,21 @@ def is_missing(value: object) -> bool:
 
 
 def normalize_gender(value: object) -> str | None:
-    """统一界面和文件中的性别表示，0 为男、1 为女。
+    """统一界面和文件中的性别表示，1 为男、2 为女。
 
     Args:
-        value: M/F、男/女、male/female 或数值 0/1。
+        value: M/F、男/女、male/female 或数值 1/2。
 
     Returns:
         M、F，或无效输入对应的 None。
     """
     if is_missing(value) or isinstance(value, bool):
         return None
-    # 统一前后空白与英文大小写；文件中的数值 0.0/1.0 也使用同一套别名表。
+    # 统一前后空白与英文大小写；文件中的数值 1.0/2.0 也使用同一套别名表。
     text = str(value).strip().upper()
-    if text in ("M", "MALE", "男", "0", "0.0"):
+    if text in ("M", "MALE", "男", "1", "1.0"):
         return "M"
-    if text in ("F", "FEMALE", "女", "1", "1.0"):
+    if text in ("F", "FEMALE", "女", "2", "2.0"):
         return "F"
     return None
 
@@ -113,8 +113,9 @@ def evaluate(
 ) -> Result:
     """使用同一入口完成单人和批量诊断。
 
-    缺测由各共识的分级函数判断是否妨碍结论；填写了非法值则明确报错，
-    即使其他替代项目有效，也不会悄悄忽略非法输入继续给出正常结果。
+    缺测由各共识的分级函数判断是否妨碍结论。对于替代测量维度（如体力表现），
+    只要有一项有效即可判断，其他项缺失或输入无效不会阻止结论；互斥维度中
+    填写了非法值时仍明确报错，避免把选定的核心测量错误悄悄当成缺测。
 
     Args:
         consensus: 完整共识定义。
@@ -134,7 +135,7 @@ def evaluate(
     # 2. 标准化基本信息；只有确定性别和适用年龄组后，才能选出正确阈值。
     gender = normalize_gender(record.get("gender"))
     if gender is None:
-        issues.append("性别未填写或无效，请使用男/女、M/F 或 0/1（0男，1女）")
+        issues.append("性别未填写或无效，请使用男/女、M/F 或 1/2（1男，2女）")
         
     band = next(iter(consensus.age_bands))
     if consensus.requires_age:
@@ -159,6 +160,7 @@ def evaluate(
     # 3. 按维度逐项检查数值，并保存有依据的正常／低下状态。
     for domain in consensus.domains:
         measured: list[State] = []
+        domain_issues: list[str] = []
         for rule in active[domain.key]:
             raw = record.get(rule.field)
             if is_missing(raw):
@@ -167,8 +169,10 @@ def evaluate(
             try:
                 value = numeric_value(raw, rule)
             except ValueError as exc:
-                # 填写了无效值要明确报错；继续循环以便检查其余项目。
-                issues.append(str(exc))
+                # 替代测量维度允许只填其中一项，其他项的无效值按缺失处理；
+                # 互斥维度的非法值仍要报错，避免核心测量错误被忽略。
+                if not domain.any_of:
+                    domain_issues.append(str(exc))
                 continue
             if not context_valid:
                 # 仍检查数值是否合法，但不在性别／年龄无效时猜测阈值。
@@ -185,6 +189,7 @@ def evaluate(
                 "state": state.value,
                 "source": rule.source,
             })
+        issues.extend(domain_issues)
         # 无有效比较结果 → 缺测；任一有效项目异常 → 低下；否则 → 正常。
         states[domain.key] = (State.MISSING if not measured else
                               State.LOW if State.LOW in measured else State.NORMAL)

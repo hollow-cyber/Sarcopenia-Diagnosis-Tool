@@ -100,7 +100,7 @@ class FormContext:
             self,
             consensus: Consensus,
             batch: bool,
-            columns: Sequence[str],
+            columns: Sequence[object],
             namespace: str,
     ) -> None:
         """保存本次渲染的基本参数。
@@ -108,7 +108,7 @@ class FormContext:
         Args:
             consensus: 当前共识定义。
             batch: 是否处于批量列映射模式。
-            columns: 批量模式下可选择的源列名。
+            columns: 批量模式下可选择的源列名（保留 pandas 读取到的原始类型）。
             namespace: 控件 key 的命名空间。
         """
         self.consensus = consensus

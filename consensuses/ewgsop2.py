@@ -38,14 +38,14 @@ def classify(states: Mapping[str, State]) -> Result:
     else:
         if mass == State.MISSING:
             return Result(PROBABLE, "可能肌少症", notes=(
-                "肌肉质量未测试，尚不能确认诊断。",))
+                "肌量无效或未测试，尚不能确认诊断。",))
         elif mass == State.NORMAL:
             return Result(PROBABLE, "可能肌少症")
         else:
             # 进入此层时力量与肌量均低，确诊已成立；继续评估严重程度。
             if performance == State.MISSING:
                 return Result(SARCOPENIA, "肌少症", notes=(
-                    "体力表现项目均未测试，严重程度未评估。",))
+                    "体力表现项目均无效或未测试，严重程度未评估。",))
             elif performance == State.NORMAL:
                 return Result(SARCOPENIA, "肌少症")
             else:
