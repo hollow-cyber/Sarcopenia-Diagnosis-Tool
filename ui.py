@@ -13,7 +13,7 @@ from xml.etree.ElementTree import ParseError
 from zipfile import BadZipFile
 from openpyxl.utils.exceptions import InvalidFileException
 
-from batch import diagnose_batch, export_excel, read_table, sheet_names
+from batch import diagnose_batch, export_excel, header_issues, read_table, sheet_names
 from consensuses import renderer_for
 from engine import evaluate
 from models import UNASSESSABLE, NEGATIVE, POSSIBLE, PROBABLE, Consensus, Result
@@ -227,6 +227,12 @@ def render_diagnosis(
         columns = frame.columns.tolist()
         with st.expander("📊 数据预览"):
             display_table(frame)
+        # 原始表头有空列名或重复列名时，pandas 会自动改写；提示按预览中的列名映射。
+        problems = header_issues(data, uploaded.name, sheet) if has_header else []
+        if problems:
+            st.warning(
+                "检测到上传文件存在" + "；".join(problems) +
+                "。pandas 会自动改写这些列名，请按照“数据预览”中显示的列名来选择映射列。")
 
     # 不同文件／模式的列映射分别保存，避免误用上一次文件的映射。
     namespace = f"{prefix}:{mode}:{file_tag}"

@@ -1,10 +1,11 @@
 """表格读取、列映射与 Excel 导出；诊断仍由纯 Python 引擎完成。"""
 
-import pandas as pd
+from collections import Counter
 from collections.abc import Mapping
 from io import BytesIO
 from pathlib import Path
 
+import pandas as pd
 
 from engine import evaluate, resolve_rules
 from models import Consensus
@@ -22,6 +23,22 @@ def sheet_names(data: bytes) -> list[str]:
     # BytesIO 把上传字节包装成文件对象；with 在读取完成后自动关闭工作簿资源。
     with pd.ExcelFile(BytesIO(data), engine="openpyxl") as workbook:
         return workbook.sheet_names
+
+
+def _csv_encoding(data: bytes) -> str:
+    """判断 CSV 应使用的编码。
+
+    Args:
+        data: 文件字节。
+
+    Returns:
+        utf-8-sig（兼容普通 UTF-8）或 gb18030。
+    """
+    try:
+        data.decode("utf-8-sig")
+        return "utf-8-sig"
+    except UnicodeDecodeError:
+        return "gb18030"
 
 
 def read_table(
@@ -48,17 +65,90 @@ def read_table(
     suffix = Path(filename).suffix.lower()
     header = 0 if has_header else None
     if suffix == ".csv":
-        try:
-            # UTF-8-sig 同时兼容普通 UTF-8 和 Excel 导出的带 BOM 的 UTF-8 文件。
-            return pd.read_csv(BytesIO(data), header=header, encoding="utf-8-sig",
-                               skip_blank_lines=False)
-        except UnicodeDecodeError:
-            return pd.read_csv(BytesIO(data), header=header, encoding="gb18030",
-                               skip_blank_lines=False)
+        return pd.read_csv(BytesIO(data), header=header, encoding=_csv_encoding(data),
+                           skip_blank_lines=False)
     if suffix == ".xlsx":
         return pd.read_excel(BytesIO(data), sheet_name=sheet or 0,
                              header=header, engine="openpyxl")
     raise ValueError(f"本工具仅支持 .xlsx 或 .csv 文件，当前文件：{filename}")
+
+
+def _raw_header_row(
+        data: bytes,
+        filename: str,
+        sheet: str | None,
+) -> list[object] | None:
+    """读取上传文件的原始首行（表头），读取失败时返回 None。
+
+    Args:
+        data: 文件字节。
+        filename: 文件名，用于判断格式。
+        sheet: Excel 工作表名；None 表示第一张工作表。
+
+    Returns:
+        原始表头单元格列表；无法读取时为 None。
+    """
+    suffix = Path(filename).suffix.lower()
+    try:
+        if suffix == ".csv":
+            frame = pd.read_csv(BytesIO(data), header=None, nrows=1,
+                                encoding=_csv_encoding(data), skip_blank_lines=False)
+        elif suffix == ".xlsx":
+            frame = pd.read_excel(BytesIO(data), sheet_name=sheet or 0,
+                                  header=None, nrows=1, engine="openpyxl")
+        else:
+            return None
+    except (ValueError, OSError, KeyError):
+        return None
+    if frame.empty:
+        return None
+    return list(frame.iloc[0])
+
+
+def _is_blank_header(value: object) -> bool:
+    """判断一个原始表头单元格是否为空。
+
+    Args:
+        value: 表头单元格。
+
+    Returns:
+        是否为空值或纯空白文本。
+    """
+    return bool(pd.isna(value)) or not str(value).strip()
+
+
+def header_issues(
+        data: bytes,
+        filename: str,
+        sheet: str | None = None,
+) -> list[str]:
+    """检查原始表头中的空列名与重复列名。
+
+    pandas 会自动改写这些列名（如 `Unnamed: 0`、`x.1`），因此返回的问题
+    用于提示用户按“数据预览”中实际显示的列名进行映射。
+
+    Args:
+        data: 文件字节。
+        filename: 文件名，用于判断格式。
+        sheet: Excel 工作表名；None 表示第一张工作表。
+
+    Returns:
+        问题描述列表；没有问题时为空列表。
+    """
+    values = _raw_header_row(data, filename, sheet)
+    if values is None:
+        return []
+    empty_columns = [index for index, value in enumerate(values, start=1)
+                     if _is_blank_header(value)]
+    names = [str(value) for value in values if not _is_blank_header(value)]
+    counts = Counter(names)
+    duplicates = [name for name, count in counts.items() if count > 1]
+    issues: list[str] = []
+    if empty_columns:
+        issues.append("空列名（第 " + "、".join(map(str, empty_columns)) + " 列）")
+    if duplicates:
+        issues.append("重复列名（" + "、".join(duplicates) + "）")
+    return issues
 
 
 def validate_mapping(
