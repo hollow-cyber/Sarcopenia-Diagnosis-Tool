@@ -231,7 +231,7 @@ def render_diagnosis(
         problems = header_issues(data, uploaded.name, sheet) if has_header else []
         if problems:
             st.warning(
-                "检测到上传文件存在" + "；".join(problems) +
+                "⚠️ 检测到上传文件存在" + "；".join(problems) +
                 "。pandas 会自动改写这些列名，请按照“数据预览”中显示的列名来选择映射列。")
 
     # 不同文件／模式的列映射分别保存，避免误用上一次文件的映射。
